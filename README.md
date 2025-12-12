@@ -79,7 +79,7 @@ python manage.py runserver
 #### Register as customer/staff/store_owner
 
 ```http
-  POST /auth/register/
+POST /auth/register/
 ```
 
 | JSON Key | Type     | Description                |
