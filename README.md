@@ -7,6 +7,8 @@ A Multi-tenant e-commerce backend where multiple vendors (tenants) can host thei
 
 ## Run Locally
 
+Suggested compatible python version : Python 3.11, Python 3.10 
+
 Clone the project
 
 ```bash
