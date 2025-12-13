@@ -88,7 +88,7 @@ POST /auth/register/
 | :-------- | :------- | :------------------------- |
 | `username` | `varchar` | username |
 | `email` | `email` | email |
-| `password1` | `varchar` | password |
+| `password` | `varchar` | password |
 | `password2` | `varchar` | confirm password |
 | `first_name` | `varchar` | first name of the user |
 | `last_name` | `varchar` | last name of the user |
