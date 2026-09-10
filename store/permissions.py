@@ -1,12 +1,19 @@
 from rest_framework import permissions
 
 class IsTenantUser(permissions.BasePermission):
-    # to check is user belongs to the tenant
-    
+    """
+    Checks tenant access:
+    - Customers can shop across any store in the platform.
+    - Store owners and staff are scoped to their respective tenant.
+    """
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
         
+        # Customers can browse and shop across all stores
+        if getattr(request.user, 'role', None) == 'customer':
+            return True
+
         if hasattr(request, 'tenant') and request.tenant:
             return request.user.tenant == request.tenant
         return True

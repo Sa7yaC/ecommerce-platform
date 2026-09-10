@@ -84,6 +84,20 @@ class Product(models.Model):
     def __str__(self):
         return f"{self.name} - {self.tenant.store_name}"
 
+# product size variant model
+class ProductSize(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='sizes')
+    size = models.CharField(max_length=20)
+    stock = models.IntegerField(validators=[MinValueValidator(0)], default=0)
+
+    class Meta:
+        db_table = 'product_sizes'
+        unique_together = ['product', 'size']
+        ordering = ['id']
+
+    def __str__(self):
+        return f"{self.product.name} ({self.size}: {self.stock})"
+
 # order model
 
 class Order(models.Model):
@@ -122,6 +136,7 @@ class Order(models.Model):
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    size = models.CharField(max_length=20, blank=True, null=True)
     quantity = models.IntegerField(validators=[MinValueValidator(1)])
     price = models.DecimalField(max_digits=10, decimal_places=2)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
@@ -134,4 +149,5 @@ class OrderItem(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.product.name} x {self.quantity}"
+        size_str = f" [{self.size}]" if self.size else ""
+        return f"{self.product.name}{size_str} x {self.quantity}"

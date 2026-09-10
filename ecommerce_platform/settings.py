@@ -1,11 +1,43 @@
 import os
 from pathlib import Path
 from datetime import timedelta
+import logging
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = 'django-insecure-your-secret-key-change-in-production'
-DEBUG = True
-ALLOWED_HOSTS = ['*']
+# Load environment variables from .env file if present
+try:
+    from dotenv import load_dotenv
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    load_dotenv(BASE_DIR / '.env')
+except ImportError:
+    BASE_DIR = Path(__file__).resolve().parent.parent
+
+# ==============================================================================
+# 1. DEBUG CONFIGURATION (Practice 1: Never leave DEBUG=True in Production)
+# ==============================================================================
+DEBUG = os.environ.get('DJANGO_DEBUG', 'False').lower() in ('true', '1', 'yes')
+
+# ==============================================================================
+# 2. SECRET KEY MANAGEMENT (Practice 1 & 6: Never hardcode secrets in repository)
+# ==============================================================================
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    if DEBUG:
+        # Development fallback only
+        SECRET_KEY = 'django-insecure-dev-only-local-secret-key-replace-in-production'
+        logging.warning("SECURITY WARNING: Using insecure development SECRET_KEY. Configure DJANGO_SECRET_KEY in production.")
+    else:
+        raise ValueError("DJANGO_SECRET_KEY environment variable must be set when DEBUG=False!")
+
+# ==============================================================================
+# 3. ALLOWED HOSTS (Practice 1: Prevent HTTP Host Header poisoning)
+# ==============================================================================
+allowed_hosts_env = os.environ.get('DJANGO_ALLOWED_HOSTS')
+if allowed_hosts_env:
+    ALLOWED_HOSTS = [h.strip() for h in allowed_hosts_env.split(',') if h.strip()]
+elif DEBUG:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '*']
+else:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -59,9 +91,15 @@ DATABASES = {
     }
 }
 
+# ==============================================================================
+# 4. STRONG PASSWORD POLICIES (Practice 7: Enforce strong password validation)
+# ==============================================================================
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {'min_length': 8},
+    },
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
@@ -71,9 +109,12 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# rest settings
+# ==============================================================================
+# 5. REST FRAMEWORK & JWT SETTINGS
+# ==============================================================================
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -83,7 +124,6 @@ REST_FRAMEWORK = {
     ),
 }
 
-# jwt settings
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=5),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
@@ -94,4 +134,103 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-CORS_ALLOW_ALL_ORIGINS = True
+# ==============================================================================
+# 6. CORS CONFIGURATION (Prevent cross-origin request hijacking)
+# ==============================================================================
+cors_origins_env = os.environ.get('CORS_ALLOWED_ORIGINS')
+if cors_origins_env:
+    CORS_ALLOWED_ORIGINS = [o.strip() for o in cors_origins_env.split(',') if o.strip()]
+    CORS_ALLOW_ALL_ORIGINS = False
+elif DEBUG:
+    # Safe local dev defaults
+    CORS_ALLOWED_ORIGINS = [
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+    ]
+    CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True').lower() == 'true'
+else:
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOWED_ORIGINS = []
+
+# ==============================================================================
+# 7. SECURE COOKIE & SESSION SETTINGS (Practice 2 & 3: Protect session and CSRF)
+# ==============================================================================
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_AGE = 86400  # 1 day
+
+# In production, cookies are transmitted strictly over HTTPS
+SESSION_COOKIE_SECURE = os.environ.get(
+    'DJANGO_SESSION_COOKIE_SECURE',
+    str(not DEBUG)
+).lower() in ('true', '1', 'yes')
+
+CSRF_COOKIE_SECURE = os.environ.get(
+    'DJANGO_CSRF_COOKIE_SECURE',
+    str(not DEBUG)
+).lower() in ('true', '1', 'yes')
+
+# ==============================================================================
+# 8. HTTPS EVERYWHERE & SSL REDIRECTION (Practice 8)
+# ==============================================================================
+SECURE_SSL_REDIRECT = os.environ.get('DJANGO_SECURE_SSL_REDIRECT', 'False').lower() in ('true', '1', 'yes')
+
+if SECURE_SSL_REDIRECT:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_HSTS_SECONDS = 31536000  # 1 year HSTS policy
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+# ==============================================================================
+# 9. CONTENT SECURITY & BROWSER HEADERS (Practice 9: XSS, Clickjacking, MIME)
+# ==============================================================================
+X_FRAME_OPTIONS = 'DENY'  # Mitigate clickjacking
+SECURE_CONTENT_TYPE_NOSNIFF = True  # Prevent MIME type sniffing
+SECURE_BROWSER_XSS_FILTER = True  # Enable browser XSS filter
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
+# ==============================================================================
+# 10. STRUCTURED SECURITY LOGGING & MONITORING (Practice 10)
+# ==============================================================================
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} [{name}:{lineno}] {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django.security': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'store': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
